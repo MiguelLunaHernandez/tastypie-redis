@@ -1,0 +1,179 @@
+# coding: utf-8
+
+from tastypie.bundle import Bundle
+from tastypie.resources import Resource
+from tastypie.exceptions import NotFound
+from django.core.exceptions import ObjectDoesNotExist
+from django.utils.translation import ugettext_lazy
+
+class RedisResource(Resource):
+
+	"""
+
+	"""
+
+	def get_database(self):
+		import redis
+
+		return redis.StrictRedis(host='localhost', port=6379, db=0)
+		#pool = redis.ConnectionPool(host='localhost', port=6379, db=0)
+		#r = redis.Redis(connection_pool=pool)
+
+		#return r
+
+	def get_object_class(self):
+		print 1
+		return self._meta.object_class
+
+	def _get_key(self, id=None):
+		print 2
+		if id:
+			return '%s:%s' % (self._meta.collection_name, id)
+
+		print len(self._meta.collection_name)
+		print self._meta.collection_name[0]
+		print self._meta.collection_name[1]
+		print self._meta.collection_name[2]
+		print self._meta.collection_name[3]
+		print self._meta.collection_name[4]
+		print self._meta.collection_name[5]
+		print self._meta.collection_name[6]
+		print self._meta.collection_name['data']
+
+		return self._meta.collection_name
+
+	def get_object_list(self, request):
+		print 3
+		bundle = self.build_bundle(request=request)
+
+		return self.obj_get_list(bundle)
+
+	def obj_get_list(self, bundle, **kwargs):
+		"""
+
+		"""
+		print 4
+		db = self.get_database()
+		result = []
+		print "4.1"
+		print db.smembers(self._get_key())[0]
+		print "4.2"
+
+		for oid in db.smembers(self._get_key()):
+			print "4.1"
+			obj = self.get_object_class()()
+
+			for k, v in db.hgetall(oid).items():
+				setattr(obj, k.decode('UTF-8'), v.decode('utf-8'))
+			result.append(obj)
+
+		return self.authorized_read_list(result, bundle)
+
+	def obj_get(self, bundle, **kwargs):
+		"""
+
+		"""
+		print 5
+		db = self.get_database()
+		key = self._get_key(kwargs.get("pk"))
+		result = db.hgetall(key)
+
+		if result:
+			obj = self.get_object_class()()
+
+			for k, v in result.items():
+				setattr(obj, k.decode('UTF-8'), v.decode('UTF-8'))
+			self.authorized_read_detail(obj, bundle)
+
+			return obj
+		raise ObjectDoesNotExist
+
+	def obj_create(self, bundle, **kwargs):
+		"""
+
+		"""
+		bundle.data.update(kwargs)
+		self.authorized_create_detail(bundle.data, bundle)
+		bundle.obj = self.get_database().hmset(
+				self._get_key(kwargs.get("pk")),
+				bundle.data
+		)
+		return  bundle
+
+	def obj_update(self, bundle, **kwargs):
+		"""
+
+		"""
+		print 7
+		self.authorized_update_detail(bundle.data, bundle)
+
+		return self.obj_create(bundle, **kwargs)
+
+	def obj_delete(self, bundle, **kwargs):
+		"""
+
+		"""
+		print 8
+		db = self.get_database()
+		key = self._get_key(kwargs.get("pk"))
+
+		if not db.exists(key):
+			raise NotFound(_("No basket found with key: %s") % key)
+		self.authorized_delete_detail(key, bundle)
+
+		if db.sismember(self._meta.collection_name, key):
+			db.srem(self._meta.collection_name, key)
+
+		if db.exists(key):
+			db.delete(key)
+
+	def obj_delete_list(self, bundle, **kwargs):
+		"""
+
+		"""
+		print 9
+		self.authorized_delete_list(bundle.data, bundle)
+		self.get_database().flushdb()
+
+
+	def detail_uri_kwargs(self, bundle_or_obj):
+	
+		"""
+		 Given a ``Bundle`` or an object, it returns the extra kwargs needed
+		 to generate a detail URI.
+
+		 By default, it uses the model's ``pk`` in order to create the URI.
+		"""
+		
+		detail_uri_name = getattr(self._meta, 'detail_uri_name', 'pk')
+		print "10"
+		print detail_uri_name
+		kwargs = {}
+
+		if isinstance(bundle_or_obj, Bundle):
+			print "10.1"
+			kwargs[detail_uri_name] = getattr(bundle_or_obj.obj, detail_uri_name)
+			print "10.2"
+		else:
+			kwargs[detail_uri_name] = getattr(bundle_or_obj, detail_uri_name)
+
+		return kwargs
+
+
+	#def detail_uri_kwargs(self, bundle_or_obj):
+
+
+	#	detail_uri_name = getattr(self._meta, 'detail_uri_name', 'pk')
+	#	kwargs = {}
+
+	#	if isinstance(bundle_or_obj, Bundle):
+	#		print 10.3
+	#		print bundle_or_obj.obj
+	#		#kwargs[detail_uri_name] = getattr(bundle_or_obj.obj, detail_uri_name)
+	#		kwargs['pk'] = bundle_or_obj.obj.order_id
+	#	else:
+	#		print 10.4
+	#		kwargs[detail_uri_name] = getattr(bundle_or_obj, detail_uri_name)
+
+	#	print 10.5
+	#	return kwargs

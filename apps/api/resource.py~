@@ -1,0 +1,52 @@
+from tastypie.authorization import Authorization
+
+from apps.api.redis_ import RedisResource
+
+from apps.core.models import Url
+from tastypie.resources import Resource
+import redis
+
+
+class UrlResource(RedisResource):
+
+    class Meta:
+        resource_name = "url"
+        allowed_methods = ["get", "post"]
+        authorization = Authorization()
+        object_class = Url
+        queryset = Url.objects.all()
+
+
+"""
+class UrlResource(Resource):
+    
+    class Meta:
+        queryset = Url.objects.all()
+        object_class = Url
+        resource_name = 'url'
+        allowed_methods = ['get', 'post', 'put']
+        authorization = Authorization()
+
+
+    def _client(self):
+
+        print "redis" 
+        return redis.Redis('localhost')
+    
+    def detail_uri_kwargs(self, bundle_or_obj):
+        
+        kwargs = {}
+        
+        if isinstance(bundle_or_obj, Bundle):
+            kwargs['pk'] = bundle_or_obj.obj
+        else:
+            kwargs['pk'] = bundle_or_obj
+
+        return kwargs
+
+    def obj_get_list(self, request=None, **kwargs):
+
+        # Filtering disabled for brevity...
+        return self.get_object_list(request)
+
+"""
